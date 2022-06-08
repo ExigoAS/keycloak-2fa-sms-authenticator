@@ -1,10 +1,11 @@
-package dasniko.keycloak.authenticator;
+package exigo.keycloak.authenticator;
 
-import dasniko.keycloak.authenticator.gateway.SmsServiceFactory;
+import exigo.keycloak.authenticator.gateway.SmsServiceFactory;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.authentication.AuthenticationFlowError;
 import org.keycloak.authentication.Authenticator;
 import org.keycloak.common.util.SecretGenerator;
+import org.keycloak.credential.CredentialModel;
 import org.keycloak.models.AuthenticationExecutionModel;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.KeycloakSession;
@@ -16,9 +17,6 @@ import org.keycloak.theme.Theme;
 import javax.ws.rs.core.Response;
 import java.util.Locale;
 
-/**
- * @author Niko Köbler, https://www.n-k.de, @dasniko
- */
 public class SmsAuthenticator implements Authenticator {
 
 	private static final String TPL_CODE = "login-sms.ftl";
@@ -28,6 +26,9 @@ public class SmsAuthenticator implements Authenticator {
 		AuthenticatorConfigModel config = context.getAuthenticatorConfig();
 		KeycloakSession session = context.getSession();
 		UserModel user = context.getUser();
+		RealmModel realm = context.getRealm();
+		var configured = session.userCredentialManager().getConfiguredUserStorageCredentialTypesStream(realm, user);
+		var canSkip = configured.anyMatch((v) -> v == "otp" || v == "webauthn");
 
 		String mobileNumber = user.getFirstAttribute("mobile_number");
 		// mobileNumber of course has to be further validated on proper format, country code, ...
@@ -48,7 +49,12 @@ public class SmsAuthenticator implements Authenticator {
 
 			SmsServiceFactory.get(config.getConfig()).send(mobileNumber, smsText);
 
-			context.challenge(context.form().setAttribute("realm", context.getRealm()).createForm(TPL_CODE));
+			var form = context.form()
+				.setAttribute("realm", context.getRealm())
+				.setAttribute("canSkip", canSkip ? "true" : "false")
+				.createForm(TPL_CODE);
+
+			context.challenge(form);
 		} catch (Exception e) {
 			context.failureChallenge(AuthenticationFlowError.INTERNAL_ERROR,
 				context.form().setError("smsAuthSmsNotSent", e.getMessage())
@@ -58,7 +64,27 @@ public class SmsAuthenticator implements Authenticator {
 
 	@Override
 	public void action(AuthenticationFlowContext context) {
-		String enteredCode = context.getHttpRequest().getDecodedFormParameters().getFirst("code");
+		var form = context.getHttpRequest().getDecodedFormParameters();
+		String enteredCode = form.getFirst("code");
+
+		String retry = form.getFirst("retry");
+		String skip = form.getFirst("skip");
+		if(retry == "true") {
+			authenticate(context);
+			return;
+		}
+
+		if(skip == "true") {
+			KeycloakSession session = context.getSession();
+			UserModel user = context.getUser();
+			RealmModel realm = context.getRealm();
+			var configured = session.userCredentialManager().getConfiguredUserStorageCredentialTypesStream(realm, user);
+			var canSkip = configured.anyMatch((v) -> v == "otp" || v == "webauthn");
+			if(canSkip) {
+				context.attempted();
+				return;
+			}
+		}
 
 		AuthenticationSessionModel authSession = context.getAuthenticationSession();
 		String code = authSession.getAuthNote("code");

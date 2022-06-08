@@ -1,4 +1,4 @@
-package dasniko.keycloak.authenticator;
+package exigo.keycloak.authenticator;
 
 import org.keycloak.Config;
 import org.keycloak.authentication.Authenticator;
@@ -10,9 +10,6 @@ import org.keycloak.provider.ProviderConfigProperty;
 
 import java.util.List;
 
-/**
- * @author Niko Köbler, https://www.n-k.de, @dasniko
- */
 public class SmsAuthenticatorFactory implements AuthenticatorFactory {
 
 	public static final String PROVIDER_ID = "sms-authenticator";
@@ -58,7 +55,14 @@ public class SmsAuthenticatorFactory implements AuthenticatorFactory {
 			new ProviderConfigProperty("length", "Code length", "The number of digits of the generated code.", ProviderConfigProperty.STRING_TYPE, 6),
 			new ProviderConfigProperty("ttl", "Time-to-live", "The time to live in seconds for the code to be valid.", ProviderConfigProperty.STRING_TYPE, "300"),
 			new ProviderConfigProperty("senderId", "SenderId", "The sender ID is displayed as the message sender on the receiving device.", ProviderConfigProperty.STRING_TYPE, "Keycloak"),
-			new ProviderConfigProperty("simulation", "Simulation mode", "In simulation mode, the SMS won't be sent, but printed to the server logs", ProviderConfigProperty.BOOLEAN_TYPE, true)
+			new ProviderConfigProperty("urlDestination", "URL Destination", "The Destination of the SMS Service.", ProviderConfigProperty.STRING_TYPE, "https://localhost/?sender=%s&message=%s"),
+			new ProviderConfigProperty("simulation", "Simulation mode", "In simulation mode, the SMS won't be sent, but printed to the server logs", ProviderConfigProperty.BOOLEAN_TYPE, true),
+
+			new ProviderConfigProperty("clientId", "Client Id", "Client Id for Authentication.", ProviderConfigProperty.STRING_TYPE, "sms-api"),
+			new ProviderConfigProperty("clientSecret", "Client Secret", "Client Secret for Authentication.", ProviderConfigProperty.PASSWORD, ""),
+			new ProviderConfigProperty("tokenUrl", "Token URL", "Token URL for fetching Access Token.", ProviderConfigProperty.STRING_TYPE, "https://keycloak/oidc/token"),
+			new ProviderConfigProperty("username", "Username", "Username of Account.", ProviderConfigProperty.STRING_TYPE, "sms-api"),
+			new ProviderConfigProperty("password", "Password", "Password of Account.", ProviderConfigProperty.PASSWORD, "")
 		);
 	}
 

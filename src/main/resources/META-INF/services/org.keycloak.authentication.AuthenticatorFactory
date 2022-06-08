@@ -1,1 +1,1 @@
-dasniko.keycloak.authenticator.SmsAuthenticatorFactory
+exigo.keycloak.authenticator.SmsAuthenticatorFactory

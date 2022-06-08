@@ -1,12 +1,9 @@
-package dasniko.keycloak.authenticator.gateway;
+package exigo.keycloak.authenticator.gateway;
 
 import org.jboss.logging.Logger;
 
 import java.util.Map;
 
-/**
- * @author Niko Köbler, https://www.n-k.de, @dasniko
- */
 public class SmsServiceFactory {
 
 	private static final Logger LOG = Logger.getLogger(SmsServiceFactory.class);
@@ -16,7 +13,7 @@ public class SmsServiceFactory {
 			return (phoneNumber, message) ->
 				LOG.warn(String.format("***** SIMULATION MODE ***** Would send SMS to %s with text: %s", phoneNumber, message));
 		} else {
-			return new AwsSmsService(config);
+			return new HTTPSmsService(config);
 		}
 	}
 
