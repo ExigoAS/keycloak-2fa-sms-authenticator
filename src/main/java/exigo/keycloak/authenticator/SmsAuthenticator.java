@@ -5,7 +5,6 @@ import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.authentication.AuthenticationFlowError;
 import org.keycloak.authentication.Authenticator;
 import org.keycloak.common.util.SecretGenerator;
-import org.keycloak.credential.CredentialModel;
 import org.keycloak.models.AuthenticationExecutionModel;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.KeycloakSession;
@@ -13,11 +12,14 @@ import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.theme.Theme;
+import org.jboss.logging.Logger;
 
 import javax.ws.rs.core.Response;
+import java.util.Arrays;
 import java.util.Locale;
 
 public class SmsAuthenticator implements Authenticator {
+	protected static final Logger logger = Logger.getLogger(SmsAuthenticator.class);
 
 	private static final String TPL_CODE = "login-sms.ftl";
 
@@ -26,9 +28,6 @@ public class SmsAuthenticator implements Authenticator {
 		AuthenticatorConfigModel config = context.getAuthenticatorConfig();
 		KeycloakSession session = context.getSession();
 		UserModel user = context.getUser();
-		RealmModel realm = context.getRealm();
-		var configured = session.userCredentialManager().getConfiguredUserStorageCredentialTypesStream(realm, user);
-		var canSkip = configured.anyMatch((v) -> v == "otp" || v == "webauthn");
 
 		String mobileNumber = user.getFirstAttribute("mobile_number");
 		// mobileNumber of course has to be further validated on proper format, country code, ...
@@ -51,7 +50,7 @@ public class SmsAuthenticator implements Authenticator {
 
 			var form = context.form()
 				.setAttribute("realm", context.getRealm())
-				.setAttribute("canSkip", canSkip ? "true" : "false")
+				.setAttribute("canSkip", canSkip(context) ? "true" : "false")
 				.createForm(TPL_CODE);
 
 			context.challenge(form);
@@ -60,6 +59,15 @@ public class SmsAuthenticator implements Authenticator {
 				context.form().setError("smsAuthSmsNotSent", e.getMessage())
 					.createErrorPage(Response.Status.INTERNAL_SERVER_ERROR));
 		}
+	}
+
+	public boolean canSkip(AuthenticationFlowContext context) {
+		KeycloakSession session = context.getSession();
+		UserModel user = context.getUser();
+		RealmModel realm = context.getRealm();
+		var configured = session.userCredentialManager().getStoredCredentialsStream(realm, user);
+		var canSkip = configured.anyMatch((v) -> v.getType().equals("otp") || v.getType().equals("webauthn"));
+		return canSkip;
 	}
 
 	@Override
@@ -74,16 +82,8 @@ public class SmsAuthenticator implements Authenticator {
 			return;
 		}
 
-		if(skip == "true") {
-			KeycloakSession session = context.getSession();
-			UserModel user = context.getUser();
-			RealmModel realm = context.getRealm();
-			var configured = session.userCredentialManager().getConfiguredUserStorageCredentialTypesStream(realm, user);
-			var canSkip = configured.anyMatch((v) -> v == "otp" || v == "webauthn");
-			if(canSkip) {
-				context.attempted();
-				return;
-			}
+		if(skip == "true" && canSkip(context)) {
+			context.attempted();
 		}
 
 		AuthenticationSessionModel authSession = context.getAuthenticationSession();
@@ -110,9 +110,13 @@ public class SmsAuthenticator implements Authenticator {
 			// invalid
 			AuthenticationExecutionModel execution = context.getExecution();
 			if (execution.isRequired()) {
-				context.failureChallenge(AuthenticationFlowError.INVALID_CREDENTIALS,
-					context.form().setAttribute("realm", context.getRealm())
-						.setError("smsAuthCodeInvalid").createForm(TPL_CODE));
+				var retryForm = context.form()
+					.setAttribute("realm", context.getRealm())
+					.setAttribute("canSkip", canSkip(context) ? "true" : "false")
+					.setError("smsAuthCodeInvalid")
+					.createForm(TPL_CODE);
+
+				context.failureChallenge(AuthenticationFlowError.INVALID_CREDENTIALS, retryForm);
 			} else if (execution.isConditional() || execution.isAlternative()) {
 				context.attempted();
 			}
