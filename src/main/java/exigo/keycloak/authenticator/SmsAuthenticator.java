@@ -29,7 +29,7 @@ public class SmsAuthenticator implements Authenticator {
 		KeycloakSession session = context.getSession();
 		UserModel user = context.getUser();
 
-		String mobileNumber = user.getFirstAttribute("mobile_number");
+		String mobileNumber = user.getFirstAttribute("phone_number");
 		// mobileNumber of course has to be further validated on proper format, country code, ...
 
 		int length = Integer.parseInt(config.getConfig().get("length"));
@@ -50,7 +50,6 @@ public class SmsAuthenticator implements Authenticator {
 
 			var form = context.form()
 				.setAttribute("realm", context.getRealm())
-				.setAttribute("canSkip", canSkip(context) ? "true" : "false")
 				.createForm(TPL_CODE);
 
 			context.challenge(form);
@@ -59,15 +58,6 @@ public class SmsAuthenticator implements Authenticator {
 				context.form().setError("smsAuthSmsNotSent", e.getMessage())
 					.createErrorPage(Response.Status.INTERNAL_SERVER_ERROR));
 		}
-	}
-
-	public boolean canSkip(AuthenticationFlowContext context) {
-		KeycloakSession session = context.getSession();
-		UserModel user = context.getUser();
-		RealmModel realm = context.getRealm();
-		var configured = session.userCredentialManager().getStoredCredentialsStream(realm, user);
-		var canSkip = configured.anyMatch((v) -> v.getType().equals("otp") || v.getType().equals("webauthn"));
-		return canSkip;
 	}
 
 	@Override
@@ -80,10 +70,6 @@ public class SmsAuthenticator implements Authenticator {
 		if(retry == "true") {
 			authenticate(context);
 			return;
-		}
-
-		if(skip == "true" && canSkip(context)) {
-			context.attempted();
 		}
 
 		AuthenticationSessionModel authSession = context.getAuthenticationSession();
@@ -109,17 +95,12 @@ public class SmsAuthenticator implements Authenticator {
 		} else {
 			// invalid
 			AuthenticationExecutionModel execution = context.getExecution();
-			if (execution.isRequired()) {
-				var retryForm = context.form()
-					.setAttribute("realm", context.getRealm())
-					.setAttribute("canSkip", canSkip(context) ? "true" : "false")
-					.setError("smsAuthCodeInvalid")
-					.createForm(TPL_CODE);
+			var retryForm = context.form()
+				.setAttribute("realm", context.getRealm())
+				.setError("smsAuthCodeInvalid")
+				.createForm(TPL_CODE);
 
-				context.failureChallenge(AuthenticationFlowError.INVALID_CREDENTIALS, retryForm);
-			} else if (execution.isConditional() || execution.isAlternative()) {
-				context.attempted();
-			}
+			context.failureChallenge(AuthenticationFlowError.INVALID_CREDENTIALS, retryForm);
 		}
 	}
 

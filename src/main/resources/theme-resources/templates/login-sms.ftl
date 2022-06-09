@@ -34,18 +34,6 @@
 				<input type="hidden" id="retry" name="retry" value="true" />
 			</div>
 		</form>
-
-		<#if canSkip = "true">
-			<form id="kc-sms-code-skip-form" class="${properties.kcFormClass!}" action="${url.loginAction}" method="post">
-				<div>
-					<span><a href="${url.loginUrl}" onclick="document.getElementById('kc-sms-code-skip-form').submit();">Use Alternative Authenticator</a></span>
-				</div>
-
-				<div>
-					<input type="hidden" id="skip name="skip" value="true" />
-				</div>
-			</form>
-		</#if>
 	<#elseif section = "info" >
 		${msg("smsAuthInstruction")}
 	</#if>
